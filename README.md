@@ -10,19 +10,28 @@ https://www.kaggle.com/c/understanding_cloud_organization) Kaggle
 competition.
 
 ## Quick start (WIP)
-
+Set environment variables in `.env`: 
+```bash
+source .env
+```
 Setup the environment: 
 ```bash
 pip install -r requirements.txt
 python setup.py install
 ```
-Run one of the two training jobs (change the arguments): 
+Generate a dummy `test.csv` that is required by the dataloader. 
 ```bash
-python train.py \
-        --img_dir_train /content/drive/My Drive/data/source/clouds/train_images \
-        --labels_path_train /content/drive/My Drive/data/source/clouds/train.csv \
-        --model_dir /content/drive/My Drive/data/saved_models/clouds/delete \
-        --log_dir /content/drive/My Drive/data/saved_models/clouds/delete/log \
+python genera_test_csv.py \
+    --data_dir /content/drive/My Drive/data/source/clouds
+```
+Train one of the two training models (`exec/train_v1.py` or
+`exec/train_v2.py`):
+```bash
+python exec/train_v1.py \
+        --img_dir_train "${DATA_DIR}/train_images" \
+        --labels_path_train "${DATA_DIR}/train.csv" \
+        --model_dir "${MODEL_DIR}" \
+        --log_dir "${LOG_DIR}" \
         --size_tr_val 20 \
         --size_val 8 \
         --batch_size 4 \
@@ -30,25 +39,21 @@ python train.py \
         --num_epochs 10 \
         --seed 1     
 ```
-or 
-```bash
-python train_v2.py \
-        --img_dir_train /content/drive/My Drive/data/source/clouds/train_images \
-        --labels_path_train /content/drive/My Drive/data/source/clouds/train.csv \
-        --model_dir /content/drive/My Drive/data/saved_models/clouds/delete \
-        --log_dir /content/drive/My Drive/data/saved_models/clouds/delete/log \
-        --size_tr_val 20 \
-        --size_val 8 \
-        --batch_size 4 \
-        --print_freq 10 \
-        --num_epochs 10 \
-        --seed 1
+To make a prediction we have created a dummy `test.csv` file that has
+the same structure as the `train.csv` file. It is created in order to
+use the same dataloader for training and for making predictions. To make
+a prediction use `exec/predict_v1.py` or `exec/predict_v2.py`:
+```bash 
+python exec/predict_v2.py \
+        --predictions_dir "${PREDICTION_DIR}" \
+        --predictions_file "result_ep_3.txt" \
+        --img_dir_test "${DATA_DIR}/test_images" \
+        --labels_path_test "${DATA_DIR}/test.csv" \
+        --model_dir "${MODEL_DIR}" \
+        --size_test 20 \
+        --batch_size 2 \
+        --load_epoch 3
 ```
-To make a prediction we have created a `test.csv` file that has the same
-properties as the `train.csv` file. The only difference is that the
-target masks column is left empty (since it has to be predicted). Look
-at `predict_v1.py` or at `predict_v2.py` see how to make a prediction
-with one of the two models.
 
 Docker image (WIP)
 
@@ -81,10 +86,12 @@ that depends on whether the model is in `train` or `eval` mode. In
 we have derived new classes from:
  - `torchvision.models.detection.rpn.RegionProposalNetwork`
  - `torchvision.models.detection.roi_heads.RoIHeads`
- - `torchvision.models.detection.generalized_rcnn.GeneralizedRCNN` 
-which have a modified `forward()` method that has the option to return 
-the losses in `eval` mode. Look at [/clouds/myclasses.py](/clouds/myclasses.py)
-for the new class definitions.
+ - `torchvision.models.detection.generalized_rcnn.GeneralizedRCNN`    
+ 
+which have a modified `forward()` method with an additional argument
+`return_loss=False` that allows to return the losses in `eval` mode.
+Look at [/clouds/myclasses.py](/clouds/myclasses.py) for the new class
+definitions.
 
 This function is used in both `train.py` and `train_v2.py`.
 

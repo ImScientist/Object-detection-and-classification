@@ -5,14 +5,14 @@ from torch.utils.data import Dataset
 
 from clouds.postprocessing import torch_reduce_predictions, \
     torch_get_encoded_predictions_all_classes_single_image
-from clouds.dataset import CloudsDataset
+from clouds.dataset_v2 import CloudsDataset  # DONE
 from clouds.torchvision_references.detection import utils
-from clouds.torchvision_references.detection.transforms import get_transform
+from clouds.torchvision_references.detection.transforms_v2 import get_transform # DONE
 
 from clouds.utils import get_model_instance_segmentation
 
 
-def predict_v1(predictions_dir: str,
+def predict_v2(predictions_dir: str,
                predictions_file: str,
                img_dir_test: str,
                labels_path_test: str,
@@ -25,6 +25,14 @@ def predict_v1(predictions_dir: str,
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
+    dataset_test = CloudsDataset(img_dir_test, labels_path_test, get_transform(False, None), size_test)
+
+    data_loader_test = torch.utils.data.DataLoader(dataset_test,
+                                                   batch_size=batch_size,
+                                                   shuffle=False,
+                                                   num_workers=2,
+                                                   collate_fn=utils.collate_fn)
+
     model = get_model_instance_segmentation(num_classes, use_my_model=True)
     model.to(device)
 
@@ -32,14 +40,6 @@ def predict_v1(predictions_dir: str,
                                      map_location=device))
 
     model.eval()
-
-    dataset_test = CloudsDataset(img_dir_test, labels_path_test, get_transform(False), size_test)
-
-    data_loader_test = torch.utils.data.DataLoader(dataset_test,
-                                                   batch_size=batch_size,
-                                                   shuffle=False,
-                                                   num_workers=2,
-                                                   collate_fn=utils.collate_fn)
 
     os.makedirs(predictions_dir, exist_ok=True)
 
@@ -50,7 +50,7 @@ def predict_v1(predictions_dir: str,
 
     while True:
         try:
-            images, targets = dataiter.next()  # in the test set the targets are empty lists
+            images, targets = dataiter.next()  # in the test set the targets are can be anything
 
             images = [img.to(device) for img in images]
 
@@ -82,7 +82,7 @@ def predict_v1(predictions_dir: str,
 
 if __name__ == "__main__":
     """ 
-    python predict_v1.py \
+    python predict_v2.py \
         --predictions_dir /content/drive/My Drive/data/source/clouds/predictions/raw_predictions_temp \
         --predictions_file result_augmentation_ep_3.txt \
         --img_dir_test /content/drive/My Drive/data/source/clouds/test_images \
@@ -147,7 +147,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    predict_v1(predictions_dir=args.predictions_dir,
+    predict_v2(predictions_dir=args.predictions_dir,
                predictions_file=args.predictions_file,
                img_dir_test=args.img_dir_test,
                labels_path_test=args.labels_path_test,

@@ -4,12 +4,14 @@ import torch
 from torch.utils.data import Dataset
 from torch.utils.tensorboard import SummaryWriter
 
-from clouds.dataset import CloudsDataset
+from clouds.dataset_v2 import CloudsDataset  # DONE
+from clouds.torchvision_references.detection.transforms_v2 import get_transform  # DONE
+
 from clouds.torchvision_references.detection.engine import train_one_epoch, evaluate_one_epoch
 from clouds.torchvision_references.detection import utils
-from clouds.torchvision_references.detection.transforms import get_transform
 
 from clouds.utils import get_model_instance_segmentation
+from clouds.torchvision_references.detection.comp_albumeraions import comp_aug
 
 
 def train(img_dir_train: str,
@@ -25,8 +27,11 @@ def train(img_dir_train: str,
           load_epoch: int = None,
           seed: int = 1):
 
-    dataset_train = CloudsDataset(img_dir_train, labels_path_train, get_transform(True), size_tr_val)
-    dataset_test = CloudsDataset(img_dir_train, labels_path_train, get_transform(False), size_tr_val)
+    os.makedirs(model_dir, exist_ok=True)
+    os.makedirs(log_dir, exist_ok=True)
+
+    dataset_train = CloudsDataset(img_dir_train, labels_path_train, get_transform(True, comp_aug), size_tr_val)
+    dataset_test = CloudsDataset(img_dir_train, labels_path_train, get_transform(False, None), size_tr_val)
 
     torch.manual_seed(seed)
     indices = torch.randperm(len(dataset_train)).tolist()
@@ -93,7 +98,7 @@ def train(img_dir_train: str,
 
 if __name__ == "__main__":
     """ 
-    python train.py \
+    python train_v2.py \
         --img_dir_train /content/drive/My Drive/data/source/clouds/train_images \
         --labels_path_train /content/drive/My Drive/data/source/clouds/train.csv \
         --model_dir /content/drive/My Drive/data/saved_models/clouds/delete \
@@ -104,7 +109,7 @@ if __name__ == "__main__":
         --print_freq 10 \
         --num_epochs 10 \
         --seed 1
-        
+
         # --load_epoch 2    
     """
     parser = argparse.ArgumentParser()
