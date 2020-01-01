@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 import torch.nn.functional as nnf
 from typing import List, Dict, Tuple, Union, Any
 
@@ -51,11 +50,13 @@ def torch_mask_to_encoded_pixels(mask: torch.Tensor) -> torch.Tensor:
         1D torch.Tensor
     """
 
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
     # reshape by starting with the elements of the first column, second column, etc.
     mask = torch.transpose(mask, -2, -1).reshape(-1)
-    mask = torch.cat((torch.tensor([0], dtype=mask.dtype),
+    mask = torch.cat((torch.tensor([0], dtype=mask.dtype, device=device),
                       mask,
-                      torch.tensor([0], dtype=mask.dtype)))
+                      torch.tensor([0], dtype=mask.dtype, device=device)))
 
     hits = mask[1:] != mask[:-1]
     enc_px = torch.arange(hits.size()[0])[hits]
@@ -74,7 +75,7 @@ def torch_get_encoded_predictions_all_classes_single_image(img_name: str,
      to the expected kaggle format.
 
     :param masks:
-        torch.Tensor (binary values) of size (# predictions, 350, 525)
+        torch.Tensor (probabilities that an object is present) of size (# predictions, 350, 525)
     :param labels:
         torch.Tensor of size (# predictions)
         the prediction labels that can take the following values: {1,2,3,4}
@@ -85,23 +86,24 @@ def torch_get_encoded_predictions_all_classes_single_image(img_name: str,
     :return:
     """
 
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
     classmap = {
-        'Sugar': torch.tensor(1),
-        'Gravel': torch.tensor(2),
-        'Flower': torch.tensor(3),
-        'Fish': torch.tensor(4)
+        'Sugar': torch.tensor(1).to(device),
+        'Gravel': torch.tensor(2).to(device),
+        'Flower': torch.tensor(3).to(device),
+        'Fish': torch.tensor(4).to(device)
     }
 
     # covert mask to binary mask
-    masks = (masks >= threshold_mask) * 1
+    masks = (masks >= torch.tensor(threshold_mask)).type(torch.int8)
 
     enc_predictions = []
 
     for k, v in classmap.items():
-        # mask_label = torch.sum(masks[labels == v], 0).clamp(0, 1)
         mask_label = masks[labels == v].sum(axis=0).clamp(0, 1)
 
-        # map the mask to a string of encoded pixels
+        # map the mask to a tensor of encoded pixels
         encoded_pixels = torch_mask_to_encoded_pixels(mask_label)
 
         encoded_pixels = ' '.join(encoded_pixels.numpy().astype(str))

@@ -44,6 +44,12 @@ python train_v2.py \
         --num_epochs 10 \
         --seed 1
 ```
+To make a prediction we have created a `test.csv` file that has the same
+properties as the `train.csv` file. The only difference is that the
+target masks column is left empty (since it has to be predicted). Look
+at `predict_v1.py` or at `predict_v2.py` see how to make a prediction
+with one of the two models.
+
 Docker image (WIP)
 
 
@@ -96,4 +102,3 @@ Bounding box formats:
  - `pascal_voc`: [x_min, y_min, x_max, y_max]   
 
 The data augmentation is used only in `train_v2.py`.
-
