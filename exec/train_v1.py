@@ -1,7 +1,7 @@
 import os
 import argparse
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader, Subset
 from torch.utils.tensorboard import SummaryWriter
 
 from clouds.dataset import CloudsDataset
@@ -24,7 +24,6 @@ def train_v1(img_dir_train: str,
              num_epochs: int = 10,
              load_epoch: int = None,
              seed: int = 1):
-
     os.makedirs(model_dir, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)
 
@@ -36,20 +35,20 @@ def train_v1(img_dir_train: str,
 
     assert len(dataset_train) > size_val, "validation set > data set"
 
-    dataset_train = torch.utils.data.Subset(dataset_train, indices[:-size_val])
-    dataset_test = torch.utils.data.Subset(dataset_test, indices[-size_val:])
+    dataset_train = Subset(dataset_train, indices[:-size_val])
+    dataset_test = Subset(dataset_test, indices[-size_val:])
 
-    data_loader_train = torch.utils.data.DataLoader(dataset_train,
-                                                    batch_size=batch_size,
-                                                    shuffle=True,
-                                                    num_workers=1,
-                                                    collate_fn=utils.collate_fn)
+    data_loader_train = DataLoader(dataset_train,
+                                   batch_size=batch_size,
+                                   shuffle=True,
+                                   num_workers=1,
+                                   collate_fn=utils.collate_fn)
 
-    data_loader_test = torch.utils.data.DataLoader(dataset_test,
-                                                   batch_size=batch_size,
-                                                   shuffle=False,
-                                                   num_workers=1,
-                                                   collate_fn=utils.collate_fn)
+    data_loader_test = DataLoader(dataset_test,
+                                  batch_size=batch_size,
+                                  shuffle=False,
+                                  num_workers=1,
+                                  collate_fn=utils.collate_fn)
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 

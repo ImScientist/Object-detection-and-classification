@@ -10,7 +10,7 @@ from .coco_eval import CocoEvaluator
 from .utils import *
 
 
-def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq):
+def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq=10):
     model.train()
     metric_logger = MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', SmoothedValue(window_size=1, fmt='{value:.6f}'))
@@ -56,7 +56,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq):
 
 
 @torch.no_grad()
-def evaluate_one_epoch(model, data_loader, device, epoch, print_freq):
+def evaluate_one_epoch(model, data_loader, device, epoch, print_freq=10):
     model.eval()
     metric_logger = MetricLogger(delimiter="  ")
     header = 'Epoch: [{}]'.format(epoch)
