@@ -4,7 +4,7 @@ import torch
 import segmentation_models_pytorch as smp
 from clouds.unet.dataset_v3 import CloudsDataset
 from clouds.postprocessing import get_encoded_predictions_single_image
-from clouds.others.utils import \
+from clouds.utils import \
     get_preprocessing, \
     get_validation_augmentation
 

@@ -4,6 +4,8 @@ import argparse
 import pandas as pd
 import numpy as np
 
+DATA_DIR = os.environ.get("DATA_DIR")
+
 
 def generate_test_csv(data_dir):
     files = os.listdir(os.path.join(data_dir, 'test_images'))
@@ -23,16 +25,17 @@ def generate_test_csv(data_dir):
 if __name__ == "__main__":
     """ Generate e dummy train.csv file that is required by the dataloader
     
-    python genera_test_csv.py \
+    python generate_test_csv.py \
         --data_dir /content/drive/My Drive/data/source/clouds
     """
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--data_dir',
-                        type=str,
-                        dest='data_dir',
-                        default=None,
-                        help='Directory with training data.')
+    parser.add_argument(
+        '--data_dir',
+        type=str,
+        dest='data_dir',
+        default=DATA_DIR,
+        help='Directory with training data.')
 
     args = parser.parse_args()
 

@@ -8,7 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from clouds.unet.dataset_v3 import CloudsDataset
 from clouds.unet.engine import train_one_epoch, evaluate_one_epoch
-from clouds.others.utils import \
+from clouds.utils import \
     get_preprocessing, \
     get_training_augmentation, \
     get_validation_augmentation

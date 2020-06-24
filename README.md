@@ -1,15 +1,21 @@
 # Object detection and classification
 
-
-We modify the architecture from the object detection example in a
-[pytorch tutorial](https://pytorch.org/tutorials/intermediate/torchvision_tutorial.html)
-by adding an evaluation function for the test data and by using a better
-data augmentation layer. The model was used in the
+We apply two different models for the detection of cloud types from the 
 [Understanding Clouds from Satellite Images](
 https://www.kaggle.com/c/understanding_cloud_organization) Kaggle
-competition.
+competition:
 
-## Quick start (WIP)
+- We modify the architecture from the object detection example in a
+[pytorch tutorial](
+https://pytorch.org/tutorials/intermediate/torchvision_tutorial.html)
+by adding an evaluation function for the test data and by using a better
+data augmentation layer. 
+
+- We use a model from the [segmentation models library](
+https://pypi.org/project/segmentation-models-pytorch/) (preferred approach) 
+ 
+
+## Quick start
 Set environment variables in `.env`: 
 ```bash
 source .env
@@ -21,8 +27,7 @@ python setup.py install
 ```
 Generate a dummy `test.csv` that is required by the dataloader. 
 ```bash
-python genera_test_csv.py \
-    --data_dir /content/drive/My Drive/data/source/clouds
+python exec/generate_test_csv.py
 ```
 Train one of the three training models (`exec/train_v1.py`,
 `exec/train_v2.py`, `exec/train_v3.py`):
@@ -44,8 +49,6 @@ python exec/predict_v3.py \
         --nrows 10 \
         --load_epoch 2
 ```
-
-Docker image (WIP)
 
 
 <details>
