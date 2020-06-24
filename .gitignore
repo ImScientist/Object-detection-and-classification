@@ -3,10 +3,10 @@ notebooks/*
 logs/*
 clouds/torchvision_references/*
 
-!notebooks/00_Explore.ipynb
-!notebooks/01_Augmentation.ipynb
-!notebooks/02_Dataloaders.ipynb
-!notebooks/03_New_backbone.ipynb
+#!notebooks/00_Explore.ipynb
+#!notebooks/01_Augmentation.ipynb
+#!notebooks/02_Dataloaders.ipynb
+#!notebooks/03_New_backbone.ipynb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -112,7 +112,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
+.env_local
 .venv
 env/
 venv/
