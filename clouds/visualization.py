@@ -3,6 +3,7 @@ from .preprocessing import get_masks_bboxes_of_disconnected_regions_from_encoded
 from typing import List, Dict, Tuple, Union
 import numpy as np
 from torchvision.transforms import functional as F
+import matplotlib.pyplot as plt
 
 
 def create_labeled_image(img_path: str, data: Dict, scale: int = 4):
@@ -42,7 +43,7 @@ def create_labeled_image(img_path: str, data: Dict, scale: int = 4):
             mask = mask_and_bbox['mask']
             bbox = mask_and_bbox['bbox']
 
-            new_mask = Image.fromarray((mask * 255).astype(np.uint8), mode='L')
+            new_mask = Image.fromarray((mask * 210).astype(np.uint8), mode='L')
             drawing.bitmap((0, 0), new_mask, fill=colors[k])
             drawing.rectangle(bbox, outline=(0, 0, 0, 256))
 
@@ -115,7 +116,6 @@ def create_labled_image_from_dataloader_batch(images, targets):
         drawing = ImageDraw.Draw(overlay)
 
         for label, mask, bbox in zip(labels, masks, bboxes):
-
             color = colors[inv_map[label]]
             new_mask = Image.fromarray((mask * 255).astype(np.uint8), mode='L')
             drawing.bitmap((0, 0), new_mask, fill=color)
@@ -128,62 +128,33 @@ def create_labled_image_from_dataloader_batch(images, targets):
     return all_images
 
 
-# # TODO: this is wrong !!
-# def create_labeled_image(img_path: str, data: Dict):
-#     """ create an image with the regions of different cloud types
-#
-#     :param img_path:
-#     :param data:
-#         {
-#             'Sugar': List[int],  # encoded pixels
-#             'Gravel': List[int],  # encoded pixels
-#             'Flower': List[int],  # encoded pixels
-#             'Fish': List[int]  # encoded pixels
-#         }
-#     :return:
-#     """
-#
-#     img_1 = Image.open(img_path).convert('RGBA')
-#     img_2 = Image.new(mode='RGBA', size=img_1.size, color=(0, 0, 0, 255))
-#     draw = ImageDraw.Draw(img_2)
-#
-#     for k, v in data.items():
-#         color = colors[k]
-#         lines = get_lines_from_encoded_pixels(v)
-#         for line in lines:
-#             draw.line(line, fill=color)
-#
-#     img = Image.blend(img_1, img_2, alpha=0.5)
-#     img = img.resize((img.width // 4, img.height // 4))
-#
-#     return img
+def visualize(image, mask, original_image=None, original_mask=None):
+    """ Plot image and masks.
+    If two pairs of images and masks are passes, show both.
+    """
+    fontsize = 14
+    class_dict = {'Sugar': 0, 'Gravel': 1, 'Flower': 2, 'Fish': 3}
 
+    if original_image is None and original_mask is None:
+        f, ax = plt.subplots(1, 5, figsize=(20, 10))
 
-# # TODO: this is wrong
-# def create_labeled_image_v2(img_path, data):
-#     """ create an image with the regions of different cloud types
-#
-#     In this case we draw every pixel separately (this is a check that
-#     we have not fucked up the process of extraction of individual pixels)
-#
-#     :param img_path:
-#     :param data:
-#     :return:
-#     """
-#     img_1 = Image.open(img_path).convert('RGBA')
-#     w_max, h_max = img_1.width, img_1.height
-#
-#     img_2 = Image.new(mode='RGBA', size=img_1.size, color=(0, 0, 0, 255))
-#     draw = ImageDraw.Draw(img_2)
-#
-#     for k, v in data.items():
-#         color = colors[k]
-#         pixels = get_all_pixels_from_encoded_pixels(v)
-#         pixels = list(filter(lambda x: 0 <= x[0] < w_max and 0 <= x[1] < h_max, pixels))
-#         for px in pixels:
-#             draw.point(px, fill=color)
-#
-#     img = Image.blend(img_1, img_2, alpha=0.5)
-#     img = img.resize((img.width // 4, img.height // 4))
-#
-#     return img
+        ax[0].imshow(image)
+        for i in range(4):
+            ax[i + 1].imshow(mask[:, :, i])
+            ax[i + 1].set_title(f'Mask {class_dict[i]}', fontsize=fontsize)
+    else:
+        f, ax = plt.subplots(2, 5, figsize=(20, 10))
+
+        ax[0, 0].imshow(original_image)
+        ax[0, 0].set_title('Original image', fontsize=fontsize)
+
+        for k, v in class_dict.items():
+            ax[0, v + 1].imshow(original_mask[:, :, v])
+            ax[0, v + 1].set_title(f'Original mask {k}', fontsize=fontsize)
+
+        ax[1, 0].imshow(image)
+        ax[1, 0].set_title('Transformed image', fontsize=fontsize)
+
+        for k, v in class_dict.items():
+            ax[1, v + 1].imshow(mask[:, :, v])
+            ax[1, v + 1].set_title(f'Transformed mask {k}', fontsize=fontsize)

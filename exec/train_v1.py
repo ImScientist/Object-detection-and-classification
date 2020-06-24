@@ -1,29 +1,33 @@
 import os
 import argparse
 import torch
-from torch.utils.data import Dataset, DataLoader, Subset
+from torch.utils.data import DataLoader, Subset
 from torch.utils.tensorboard import SummaryWriter
 
-from clouds.dataset import CloudsDataset
-from clouds.torchvision_references.detection.engine import train_one_epoch, evaluate_one_epoch
-from clouds.torchvision_references.detection import utils
-from clouds.torchvision_references.detection.transforms import get_transform
+from clouds.utils import collate_fn
+from clouds.frcnn.dataset_v1 import CloudsDataset
+from clouds.frcnn.transforms_v1 import get_transform
+from clouds.frcnn.engine import train_one_epoch, evaluate_one_epoch
 
 from clouds.utils import get_model_instance_segmentation
 
+DATA_DIR = os.environ.get('DATA_DIR', 'data')
 
-def train_v1(img_dir_train: str,
-             labels_path_train: str,
-             model_dir: str = None,
-             log_dir: str = None,
-             num_classes: int = 5,
-             size_tr_val: int = None,
-             size_val: int = 500,
-             batch_size: int = 4,
-             print_freq: int = 10,
-             num_epochs: int = 10,
-             load_epoch: int = None,
-             seed: int = 1):
+
+def train(
+        img_dir_train: str,
+        labels_path_train: str,
+        model_dir: str = None,
+        log_dir: str = None,
+        num_classes: int = 5,
+        size_tr_val: int = None,
+        size_val: int = 500,
+        batch_size: int = 4,
+        print_freq: int = 10,
+        num_epochs: int = 10,
+        load_epoch: int = None,
+        seed: int = 1
+):
     os.makedirs(model_dir, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)
 
@@ -38,17 +42,19 @@ def train_v1(img_dir_train: str,
     dataset_train = Subset(dataset_train, indices[:-size_val])
     dataset_test = Subset(dataset_test, indices[-size_val:])
 
-    data_loader_train = DataLoader(dataset_train,
-                                   batch_size=batch_size,
-                                   shuffle=True,
-                                   num_workers=1,
-                                   collate_fn=utils.collate_fn)
+    data_loader_train = DataLoader(
+        dataset_train,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=1,
+        collate_fn=collate_fn)
 
-    data_loader_test = DataLoader(dataset_test,
-                                  batch_size=batch_size,
-                                  shuffle=False,
-                                  num_workers=1,
-                                  collate_fn=utils.collate_fn)
+    data_loader_test = DataLoader(
+        dataset_test,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=1,
+        collate_fn=collate_fn)
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -56,8 +62,9 @@ def train_v1(img_dir_train: str,
 
     if load_epoch is not None:
         print('load saved model')
-        model.load_state_dict(torch.load(os.path.join(model_dir,
-                                                      f'state_dict_epoch_{load_epoch}.pth')))
+        model.load_state_dict(torch.load(os.path.join(
+            model_dir, f'state_dict_epoch_{load_epoch}.pth'))
+        )
 
     model.to(device)
 
@@ -111,84 +118,84 @@ if __name__ == "__main__":
     """
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--img_dir_train',
-                        type=str,
-                        dest='img_dir_train',
-                        default=None,
-                        help='Directory with training images.')
+    parser.add_argument(
+        '--img_dir_train',
+        type=str,
+        dest='img_dir_train',
+        default=os.path.join(DATA_DIR, 'train_images'),
+        help='Directory with training images.')
 
-    parser.add_argument('--labels_path_train',
-                        type=str,
-                        dest='labels_path_train',
-                        default=None,
-                        help='Path of the csv file with training labels.')
+    parser.add_argument(
+        '--labels_path_train',
+        type=str,
+        dest='labels_path_train',
+        default=os.path.join(DATA_DIR, 'train.csv'),
+        help='Path of the csv file with training labels.')
 
-    parser.add_argument('--model_dir',
-                        type=str,
-                        dest='model_dir',
-                        default=None,
-                        help='Directory where trained models will be saved.')
+    parser.add_argument(
+        '--model_dir',
+        type=str,
+        dest='model_dir',
+        default=os.path.join(DATA_DIR, 'saved_models'),
+        help='Directory where trained models will be saved.')
 
-    parser.add_argument('--log_dir',
-                        type=str,
-                        dest='log_dir',
-                        default=None,
-                        help='Directory where training logs will be saved.')
+    parser.add_argument(
+        '--log_dir',
+        type=str,
+        dest='log_dir',
+        default=os.path.join(DATA_DIR, 'logs'),
+        help='Directory where training logs will be saved.')
 
-    parser.add_argument('--size_tr_val',
-                        type=int,
-                        dest='size_tr_val',
-                        default=None,
-                        help='Numbers of different images from `labels_path_train` that will be read.\n'
-                             'Used only to test the algorithm with a small amount of data.')
+    parser.add_argument(
+        '--size_tr_val',
+        type=int,
+        dest='size_tr_val',
+        default=None,
+        help='Numbers of different images from `labels_path_train` that will be read.\n'
+             'Used only to test the algorithm with a small amount of data.')
 
-    parser.add_argument('--size_val',
-                        type=int,
-                        dest='size_val',
-                        default=300,
-                        help='Size of the validation set.')
+    parser.add_argument(
+        '--size_val',
+        type=int,
+        dest='size_val',
+        default=300,
+        help='Size of the validation set.')
 
-    parser.add_argument('--batch_size',
-                        type=int,
-                        dest='batch_size',
-                        default=4,
-                        help='Batch size')
+    parser.add_argument(
+        '--batch_size',
+        type=int,
+        dest='batch_size',
+        default=4,
+        help='Batch size')
 
-    parser.add_argument('--print_freq',
-                        type=int,
-                        dest='print_freq',
-                        default=10,
-                        help='Print training info every `print_freq` epochs.')
+    parser.add_argument(
+        '--print_freq',
+        type=int,
+        dest='print_freq',
+        default=10,
+        help='Print training info every `print_freq` epochs.')
 
-    parser.add_argument('--load_epoch',
-                        type=int,
-                        dest='load_epoch',
-                        default=None,
-                        help='Continue training by loading a model from a given epoch.')
+    parser.add_argument(
+        '--load_epoch',
+        type=int,
+        dest='load_epoch',
+        default=None,
+        help='Continue training by loading a model from a given epoch.')
 
-    parser.add_argument('--num_epochs',
-                        type=int,
-                        dest='num_epochs',
-                        default=10,
-                        help='Number of training epochs.')
+    parser.add_argument(
+        '--num_epochs',
+        type=int,
+        dest='num_epochs',
+        default=10,
+        help='Number of training epochs.')
 
-    parser.add_argument('--seed',
-                        type=int,
-                        dest='seed',
-                        default=1,
-                        help='seed')
+    parser.add_argument(
+        '--seed',
+        type=int,
+        dest='seed',
+        default=1,
+        help='seed')
 
     args = parser.parse_args()
 
-    train_v1(img_dir_train=args.img_dir_train,
-             labels_path_train=args.labels_path_train,
-             model_dir=args.model_dir,
-             log_dir=args.log_dir,
-             num_classes=5,
-             size_tr_val=args.size_tr_val,
-             size_val=args.size_val,
-             batch_size=args.batch_size,
-             print_freq=args.print_freq,
-             num_epochs=args.num_epochs,
-             load_epoch=args.load_epoch,
-             seed=args.seed)
+    train(**vars(args))

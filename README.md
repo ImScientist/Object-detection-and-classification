@@ -24,44 +24,34 @@ Generate a dummy `test.csv` that is required by the dataloader.
 python genera_test_csv.py \
     --data_dir /content/drive/My Drive/data/source/clouds
 ```
-Train one of the two training models (`exec/train_v1.py` or
-`exec/train_v2.py`):
+Train one of the three training models (`exec/train_v1.py`,
+`exec/train_v2.py`, `exec/train_v3.py`):
 ```bash
-python exec/train_v1.py \
-        --img_dir_train "${DATA_DIR}/train_images" \
-        --labels_path_train "${DATA_DIR}/train.csv" \
-        --model_dir "${MODEL_DIR}" \
-        --log_dir "${LOG_DIR}" \
+python exec/train_v3.py \
         --size_tr_val 20 \
         --size_val 8 \
-        --batch_size 4 \
-        --print_freq 10 \
-        --num_epochs 10 \
-        --seed 1     
+        --batch_size 2 \
+        --print_freq 2 \
+        --num_epochs 3 \
+        --seed 1
 ```
 To make a prediction we have created a dummy `test.csv` file that has
 the same structure as the `train.csv` file. It is created in order to
 use the same dataloader for training and for making predictions. To make
-a prediction use `exec/predict_v1.py` or `exec/predict_v2.py`:
+a prediction use `exec/predict_v1.py`, `exec/predict_v2.py` or  `exec/predict_v3.py`:
 ```bash 
-python exec/predict_v2.py \
-        --predictions_dir "${PREDICTION_DIR}" \
-        --predictions_file "result_ep_3.txt" \
-        --img_dir_test "${DATA_DIR}/test_images" \
-        --labels_path_test "${DATA_DIR}/test.csv" \
-        --model_dir "${MODEL_DIR}" \
-        --size_test 20 \
-        --batch_size 2 \
-        --load_epoch 3
+python exec/predict_v3.py \
+        --nrows 10 \
+        --load_epoch 2
 ```
 
 Docker image (WIP)
 
 
+<details>
+    <summary>Faster RCNN Architecture </summary>
 
-## Architecture
-
-The current example uses a Faster RCNN with a pretrained Resnet50 as
+The examples (`train_v1.py`, `train_v2.py`) use a Faster RCNN with a pretrained Resnet50 as
 a backbone. The model detects objects, masks and bounding boxes. Since
 the training data provided in the Kaggle competition contains only masks
 of four different object types and no bounding boxes we have used an
@@ -78,7 +68,7 @@ The original model has several weaknesses:
   if the model is overfitting.
 
 
-### 1 Add `evaluate()` function for the test data
+#### 1 Add `evaluate()` function for the test data
 
 The default `forward` function of the used classes has different output 
 that depends on whether the model is in `train` or `eval` mode. In 
@@ -90,13 +80,13 @@ we have derived new classes from:
  
 which have a modified `forward()` method with an additional argument
 `return_loss=False` that allows to return the losses in `eval` mode.
-Look at [/clouds/myclasses.py](/clouds/myclasses.py) for the new class
+Look at [/clouds/myclasses.py](/clouds/frcnn/myclasses.py) for the new class
 definitions.
 
 This function is used in both `train.py` and `train_v2.py`.
 
 
-### 2 Better data augmentation
+#### 2 Better data augmentation
 
 We have used the [albumeration](https://github.com/albu/albumentations) 
 library for data augmentation. The library takes care of all 
@@ -109,3 +99,14 @@ Bounding box formats:
  - `pascal_voc`: [x_min, y_min, x_max, y_max]   
 
 The data augmentation is used only in `train_v2.py`.
+</details>
+
+<details>
+    <summary>Segmentation model Architecture (preferred) </summary>
+    
+The example `train_v3.py` makes use of the segmentation models library. 
+In this case we only work with different the U-shaped convolutional neural 
+networks which previously were representing only the backbone of the RCNN,
+i.e. no region proposal network, no RoI heads for bounding boxes and masks.
+
+</details>

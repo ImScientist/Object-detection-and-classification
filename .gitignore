@@ -1,6 +1,7 @@
 *.idea
 notebooks/*
 logs/*
+clouds/torchvision_references/*
 
 !notebooks/00_Explore.ipynb
 !notebooks/01_Augmentation.ipynb

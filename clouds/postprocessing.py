@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as nnf
+import numpy as np
 from typing import List, Dict, Tuple, Union, Any
 
 
@@ -67,6 +68,25 @@ def torch_mask_to_encoded_pixels(mask: torch.Tensor) -> torch.Tensor:
     return enc_px
 
 
+def np_mask_to_encoded_pixels(mask: np.ndarray):
+    """ Map 2D mask to 1D list of encoded pixels
+
+    :param mask: 2D numpy array
+    :return:
+    """
+    # reshape by starting with the elements of the first column, second column, etc.
+    mask = mask.transpose(1, 0).reshape(-1)
+    mask = np.concatenate(([0], mask, [0]))
+
+    hits = mask[1:] != mask[:-1]
+
+    enc_px = np.arange(len(hits))[hits]
+    enc_px[1::2] -= enc_px[::2]
+    enc_px[::2] += 1
+
+    return enc_px
+
+
 def torch_get_encoded_predictions_all_classes_single_image(img_name: str,
                                                            masks: torch.Tensor,
                                                            labels: torch.Tensor,
@@ -110,6 +130,25 @@ def torch_get_encoded_predictions_all_classes_single_image(img_name: str,
 
         enc_prediction = f"{img_name}_{k}, {encoded_pixels}"
 
+        enc_predictions.append(enc_prediction)
+
+    return enc_predictions
+
+
+def get_encoded_predictions_single_image(
+        img_name: str,
+        masks,
+        threshold_mask: float = 0.):
+    enc_predictions = []
+    classes = ['Sugar', 'Gravel', 'Flower', 'Fish']
+
+    # covert mask to binary mask
+    masks = (masks >= torch.tensor(threshold_mask)).type(torch.int8)
+
+    for i, class_name in enumerate(classes):
+        encoded_px = torch_mask_to_encoded_pixels(masks[i])
+        encoded_px = ' '.join(encoded_px.numpy().astype(str))
+        enc_prediction = f"{img_name}_{class_name}, {encoded_px}"
         enc_predictions.append(enc_prediction)
 
     return enc_predictions

@@ -1,3 +1,4 @@
+import torch
 import torchvision
 import pretrainedmodels
 import matplotlib.pyplot as plt
@@ -7,7 +8,7 @@ from torchvision.models.detection.rpn import AnchorGenerator
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
-from .myclasses import my_maskrcnn_resnet50_fpn
+from clouds.frcnn.myclasses import my_maskrcnn_resnet50_fpn
 
 
 def get_colors():
@@ -110,44 +111,15 @@ def get_model_instance_segmentation_v2(num_classes, architecture: str = 'resnet1
     return model
 
 
-def junk():
-    """
-    delete me
-    :return:
-    """
+def warmup_lr_scheduler(optimizer, warmup_iters, warmup_factor):
+    def f(x):
+        if x >= warmup_iters:
+            return 1
+        alpha = float(x) / warmup_iters
+        return warmup_factor * (1 - alpha) + alpha
 
-    import torchvision
-    import clouds.torchvision_references.detection.transforms as T
-    model = torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained=True)
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, f)
 
-    from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-    # from albumentations import torch as AT
-    import albumentations as albu
-    from albumentations import (
-        PadIfNeeded,
-        HorizontalFlip,
-        VerticalFlip,
-        CenterCrop,
-        Crop,
-        Compose,
-        Transpose,
-        RandomRotate90,
-        RandomCrop,
-        ElasticTransform,
-        GridDistortion,
-        OpticalDistortion,
-        RandomSizedCrop,
-        RandomSizedBBoxSafeCrop,
-        OneOf,
-        CLAHE,
-        RandomBrightnessContrast,
-        RandomGamma
-    )
 
-    import pretrainedmodels
-    architecture = 'resnet18'
-    model = pretrainedmodels.__dict__[architecture](num_classes=1000, pretrained='imagenet')
-    backbone = model.features
-
-    from torch.utils.tensorboard import SummaryWriter
-    writer = SummaryWriter()
+def collate_fn(batch):
+    return tuple(zip(*batch))

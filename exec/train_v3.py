@@ -1,72 +1,92 @@
 import os
 import argparse
 import torch
-from torch.utils.data import Dataset
+import torch.nn as nn
+import segmentation_models_pytorch as smp
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from clouds.unet.dataset_v3 import CloudsDataset
+from clouds.unet.engine import train_one_epoch, evaluate_one_epoch
+from clouds.others.utils import \
+    get_preprocessing, \
+    get_training_augmentation, \
+    get_validation_augmentation
 
-from clouds.utils import collate_fn, get_model_instance_segmentation
-from clouds.frcnn.comp_albumeraions import comp_aug
-from clouds.frcnn.dataset_v2 import CloudsDataset
-from clouds.frcnn.transforms_v2 import get_transform
-from clouds.frcnn.engine import train_one_epoch, evaluate_one_epoch
-
+ENCODER = 'resnet18'
+ENCODER_WEIGHTS = 'imagenet'
+ACTIVATION = None
 DATA_DIR = os.environ.get('DATA_DIR', 'data')
 
 
 def train(
         img_dir_train: str,
         labels_path_train: str,
-        model_dir: str = None,
+        model_dir: str,
         log_dir: str = None,
-        num_classes: int = 5,
         size_tr_val: int = None,
         size_val: int = 500,
-        batch_size: int = 4,
+        num_epochs: int = 19,
+        batch_size: int = 2,
         print_freq: int = 10,
-        num_epochs: int = 10,
         load_epoch: int = None,
         seed: int = 1
 ):
     os.makedirs(model_dir, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    torch.manual_seed(seed)
+
+    model = smp.Unet(
+        encoder_name=ENCODER,
+        encoder_weights=ENCODER_WEIGHTS,
+        classes=4,
+        activation=ACTIVATION,
+    )
+    model.to(device)
+    preprocessing_fn = smp.encoders.get_preprocessing_fn(ENCODER, ENCODER_WEIGHTS)
 
     dataset_train = CloudsDataset(
-        img_dir_train, labels_path_train, get_transform(True, comp_aug), size_tr_val)
-    dataset_test = CloudsDataset(
-        img_dir_train, labels_path_train, get_transform(False, None), size_tr_val)
+        img_dir=img_dir_train,
+        labels_path=labels_path_train,
+        transforms=get_training_augmentation(),
+        preprocessing=get_preprocessing(preprocessing_fn),
+        n_el=size_tr_val
+    )
 
-    torch.manual_seed(seed)
+    dataset_test = CloudsDataset(
+        img_dir=img_dir_train,
+        labels_path=labels_path_train,
+        transforms=get_validation_augmentation(),
+        preprocessing=get_preprocessing(preprocessing_fn),
+        n_el=size_tr_val
+    )
+
     indices = torch.randperm(len(dataset_train)).tolist()
 
-    assert len(dataset_train) > size_val, "validation set > data set"
+    assert len(dataset_train) > size_val, "validation set >= data set"
 
     dataset_train = torch.utils.data.Subset(dataset_train, indices[:-size_val])
     dataset_test = torch.utils.data.Subset(dataset_test, indices[-size_val:])
 
     data_loader_train = torch.utils.data.DataLoader(
-        dataset_train, batch_size=batch_size, shuffle=True, num_workers=1, collate_fn=collate_fn
+        dataset_train, batch_size=batch_size, shuffle=True
     )
 
     data_loader_test = torch.utils.data.DataLoader(
-        dataset_test, batch_size=batch_size, shuffle=False, num_workers=1, collate_fn=collate_fn
+        dataset_test, batch_size=batch_size, shuffle=False
     )
 
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    optimizer = torch.optim.Adam([
+        {'params': model.decoder.parameters(), 'lr': 1e-2},
+        {'params': model.encoder.parameters(), 'lr': 1e-3},
+        {'params': model.segmentation_head.parameters(), 'lr': 1e-3}
+    ])
 
-    model = get_model_instance_segmentation(num_classes, use_my_model=True)
+    # lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.1)
+    lr_scheduler = ReduceLROnPlateau(optimizer, factor=0.15, patience=2)
 
-    if load_epoch is not None:
-        print('load saved model')
-        state_dict_path = os.path.join(model_dir, f'state_dict_epoch_{load_epoch}.pth')
-        model.load_state_dict(torch.load(state_dict_path))
-
-    model.to(device)
-
-    params = [p for p in model.parameters() if p.requires_grad]
-
-    optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
-
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.1)
+    criterion = nn.BCEWithLogitsLoss()
 
     if load_epoch is not None:
         epoch_range = range(load_epoch + 1, num_epochs)
@@ -76,16 +96,19 @@ def train(
     for epoch in epoch_range:
 
         logger_train = train_one_epoch(
-            model, optimizer, data_loader_train, device, epoch, print_freq=print_freq
+            model, optimizer, criterion, data_loader_train, device, epoch, print_freq
         )
 
-        lr_scheduler.step(epoch=epoch)
+        lr_scheduler.step(metrics=logger_train.meters['loss'].value)
 
         logger_test = evaluate_one_epoch(
-            model, data_loader_test, device, epoch, print_freq=print_freq
+            model, criterion, data_loader_test, device, epoch, print_freq
         )
 
-        torch.save(model.state_dict(), os.path.join(model_dir, f'state_dict_epoch_{epoch}.pth'))
+        torch.save(
+            model.state_dict(),
+            os.path.join(model_dir, f'state_dict_epoch_{epoch}.pth')
+        )
 
         with SummaryWriter(log_dir) as w:
             for k, meter in logger_train.meters.items():
@@ -97,17 +120,15 @@ def train(
 
 
 if __name__ == "__main__":
-    """ 
-    python exec/train_v2.py \
-        --img_dir_train /content/drive/My Drive/data/source/clouds/train_images \
-        --labels_path_train /content/drive/My Drive/data/source/clouds/train.csv \
-        --model_dir /content/drive/My Drive/data/saved_models/clouds/delete \
-        --log_dir /content/drive/My Drive/data/saved_models/clouds/delete/log \
+    """
+    setup $DATA_DIR
+     
+    python exec/train_v3.py \
         --size_tr_val 20 \
         --size_val 8 \
-        --batch_size 4 \
-        --print_freq 10 \
-        --num_epochs 10 \
+        --batch_size 2 \
+        --print_freq 2 \
+        --num_epochs 3 \
         --seed 1
 
         # --load_epoch 2    

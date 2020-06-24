@@ -13,11 +13,7 @@ def split_str(x: str) -> List[int]:
 
 
 def preprocess_bboxes(data_path: str, n_el: int = 100):
-
-    if n_el:
-        df = pd.read_csv(data_path, nrows=4*n_el)
-    else:
-        df = pd.read_csv(data_path)
+    df = pd.read_csv(data_path, nrows=4 * n_el if n_el else None)
 
     df['pixels'] = df['EncodedPixels'].apply(lambda x: split_str(x))
 
@@ -62,11 +58,13 @@ def resize_bbox_position(bbox, scale=4):
     :param bbox: = [x1, y1, x2, y2]
     :param scale: scaling factor
     """
-    bbox = (bbox/scale).round().astype(int)
+    bbox = (bbox / scale).round().astype(int)
     return bbox
 
 
-def encoded_pixels_to_mask(encoded_pixels, img_height: int = 1400, img_width: int = 2100):
+def encoded_pixels_to_mask(
+        encoded_pixels, img_height: int = 1400, img_width: int = 2100
+):
     """
 
     :param encoded_pixels:
@@ -89,7 +87,9 @@ def encoded_pixels_to_mask(encoded_pixels, img_height: int = 1400, img_width: in
     return mask
 
 
-def get_masks_bboxes_of_disconnected_regions_from_encoded_pixels(data: Dict, img_height: int = 1400, img_width: int = 2100):
+def get_masks_bboxes_of_disconnected_regions_from_encoded_pixels(
+        data: Dict, img_height: int = 1400, img_width: int = 2100
+):
     """
 
     :param data:
@@ -123,11 +123,12 @@ def get_masks_bboxes_of_disconnected_regions_from_encoded_pixels(data: Dict, img
     masks_and_bboxes = {}
 
     for k, v in data.items():
-
         mask = encoded_pixels_to_mask(v, img_height, img_width)
 
         # separate the binary mask in a list of non-connected regions
-        n_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask.astype(np.uint8), connectivity=8)
+        n_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
+            mask.astype(np.uint8), connectivity=8
+        )
 
         # labels == 0 is the background. ignore it
         masks = [(labels == el).astype(int) for el in range(1, n_labels)]
@@ -135,8 +136,8 @@ def get_masks_bboxes_of_disconnected_regions_from_encoded_pixels(data: Dict, img
 
         bboxes = [get_bbox(el) for el in masks]
 
-        masks_and_bboxes[k] = [{'mask': mask, 'bbox': bbox} for mask, bbox in zip(masks, bboxes)]
+        masks_and_bboxes[k] = [
+            {'mask': mask, 'bbox': bbox} for mask, bbox in zip(masks, bboxes)
+        ]
 
     return masks_and_bboxes
-
-

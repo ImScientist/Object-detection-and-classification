@@ -39,10 +39,11 @@ class ImgAugmentation(object):
         n_boxes = 0
         augmented = {}
         while n_boxes == 0:
-            augmented = self.comp_aug(image=image,
-                                      mask=target['masks'].transpose(1, 2, 0),  # (#masks,h,w) -> (h,w,#masks)
-                                      bboxes=target['boxes'],
-                                      labels=target['labels'])
+            augmented = self.comp_aug(
+                image=image,
+                mask=target['masks'].transpose(1, 2, 0),  # (#masks,h,w) -> (h,w,#masks)
+                bboxes=target['boxes'],
+                labels=target['labels'])
             n_boxes = len(augmented['bboxes'])
 
         boxes = np.array(augmented['bboxes']).astype(int)
@@ -98,7 +99,6 @@ class Compose(object):
 
 
 def get_transform(training_mode, composite_aug):
-
     transforms = list()
     if training_mode:
         transforms.append(ImgAugmentation(composite_aug))
