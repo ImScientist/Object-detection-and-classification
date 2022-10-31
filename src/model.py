@@ -9,7 +9,7 @@ logger.setLevel(logging.INFO)
 
 
 # TODO: If I want to use them I have to create a custom class with modified
-#  train step
+#  train step...
 def augmentation_layers(height, width, new_height, new_width):
     """ Image and mask augmentation layers
 
@@ -41,8 +41,8 @@ def augmentation_layers(height, width, new_height, new_width):
 
 
 # The simplest possible model....
-def generate_model(height, width):
-    """ model body """
+def generate_baseline_model(height, width):
+    """ Baseline model """
 
     args = {'activation': 'relu', 'padding': "same"}
 

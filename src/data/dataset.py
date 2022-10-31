@@ -54,7 +54,7 @@ def load_dataset(
         data_dir: str,
         batch_size: int,
         prefetch_size: int,
-        cache: bool = True,
+        cache: bool = False,
         cycle_length: int = 2,
         max_files: int = None,
 ):
