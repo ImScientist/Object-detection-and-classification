@@ -1,7 +1,7 @@
 import numpy as np
 
 from PIL import Image, ImageDraw
-from src.data.generate_tr_va_te import mask_from_compact_notation
+from src.data.preprocessing import mask_from_compact_notation
 from src.utils import cloud_colors
 
 

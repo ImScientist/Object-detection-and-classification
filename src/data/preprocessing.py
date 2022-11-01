@@ -232,7 +232,6 @@ def train_val_test_split(
     return idx_tr, idx_va, idx_te
 
 
-# TODO: add an operation for the submission dataset
 def create_tr_va_te_datasets(
         source_dir: str,
         output_dir: str,
@@ -240,9 +239,8 @@ def create_tr_va_te_datasets(
         n_el: int = None,
         reduction_factor: int = 1
 ):
-    """ Create training, validation and test datasets the raw data
-    and store them as .tfrecords
-
+    """ Create training, validation, test and submission datasets from the raw
+    data and store them as .tfrecords
 
     Parameters
     ----------
@@ -263,7 +261,8 @@ def create_tr_va_te_datasets(
         `output_dir`
         ├── train/
         ├── validation/
-        └── test/
+        ├── test/
+        └── submission/
     """
 
     df = preprocess_labels_file(
@@ -271,17 +270,26 @@ def create_tr_va_te_datasets(
         data_dir=os.path.join(source_dir, 'train_images'),
         n_el=n_el)
 
+    # The sample masks in the submission (sb) dataset have no meaning, but we
+    # will keep them for simplicity
+    df_sb = preprocess_labels_file(
+        path=os.path.join(source_dir, 'sample_submission.csv'),
+        data_dir=os.path.join(source_dir, 'test_images'))
+
     idx_tr, idx_va, idx_te = train_val_test_split(
         df=df,
         tr_va_te_frac=tr_va_te_frac,
         stratify_cols=['Sugar', 'Gravel', 'Flower', 'Fish'],
         random_state=12)
+    idx_sb = df_sb.index
 
     output_tr = os.path.join(output_dir, 'train')
     output_va = os.path.join(output_dir, 'validation')
     output_te = os.path.join(output_dir, 'test')
+    output_sb = os.path.join(output_dir, 'submission')
 
     args = {'reduction_factor': reduction_factor}
     create_tfrecords(idx=idx_tr, df=df, output_dir=output_tr, **args)
     create_tfrecords(idx=idx_va, df=df, output_dir=output_va, **args)
     create_tfrecords(idx=idx_te, df=df, output_dir=output_te, **args)
+    create_tfrecords(idx=idx_sb, df=df_sb, output_dir=output_sb, **args)
