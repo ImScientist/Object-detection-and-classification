@@ -1,11 +1,12 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 from PIL import Image, ImageDraw
 from src.data.preprocessing import mask_from_compact_notation
 from src.utils import cloud_colors
 
 
-def create_labeled_image(
+def visualize_labeled_image(
         img_path: str,
         data: dict[str, list[int]],
         downscale: int = 4,
@@ -42,3 +43,56 @@ def create_labeled_image(
     img = img.resize((img.width // downscale, img.height // downscale))
 
     return img
+
+
+def visualize_multiple_predictions(y, y_hat, n: int = 5):
+    """ Visualize predicted segments for multiple images
+
+    Parameters
+    ----------
+      y: tensor or np.array with shape(None, widht, height, 4)
+      y_hat: tensor or np.array with shape(None, widht, height, 4)
+      n: number of images
+    """
+
+    assert y.ndim == 4
+    assert y_hat.ndim == 4
+
+    figsize = (12, 4 * n)
+    fig = plt.figure(figsize=figsize)
+
+    idx = 1
+    for r in range(n):
+        for c in range(4):
+            plt.subplot(2 * n, 4, idx)
+            plt.title('segments')
+            plt.imshow(y[r, ..., c])
+            plt.axis('off')
+
+            plt.subplot(2 * n, 4, idx + 4)
+            plt.title('predictions')
+            plt.imshow(y_hat[r, ..., c])
+            plt.axis('off')
+
+            idx += 1
+        idx += 4
+
+    plt.tight_layout()
+    return fig
+
+
+# TOOD: include masks
+def visualize_image_augmentations(img_orig, img_augmented, figsize=(20, 8)):
+    """ Visualize image or mask augmentations """
+
+    fig = plt.figure(figsize=figsize)
+
+    plt.subplot(1, 2, 1)
+    plt.title('Original image')
+    plt.imshow(img_orig)
+
+    plt.subplot(1, 2, 2)
+    plt.title('Augmented image')
+    plt.imshow(img_augmented)
+
+    return fig

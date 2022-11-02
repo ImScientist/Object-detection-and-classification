@@ -168,6 +168,7 @@ def train(
         early_stopping_patience=250,
         period=2)
 
+    # NO augmentation
     ds_tr = load_dataset(data_dir=os.path.join(ds_dir, 'train'), **ds_args)
     ds_va = load_dataset(data_dir=os.path.join(ds_dir, 'validation'), **ds_args)
     ds_te = load_dataset(data_dir=os.path.join(ds_dir, 'test'), **ds_args)
