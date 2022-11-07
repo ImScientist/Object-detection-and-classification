@@ -181,7 +181,7 @@ def create_tfrecords(
         partition_size: int = 400,
         reduction_factor: int = 1
 ):
-    """ Create .tfrecords """
+    """ Create tfrecords. Each record holds `partition_size` examples. """
 
     os.makedirs(output_dir)
 

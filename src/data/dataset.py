@@ -84,29 +84,32 @@ def load_dataset(
     files = glob.glob(os.path.join(data_dir, '*.tfrecords'))
     files = sorted(files)[:max_files]
 
+    args = {'num_parallel_calls': tf.data.AUTOTUNE}
+
     ds = (
         tf.data.Dataset
         .from_tensor_slices(files)
         .interleave(
             lambda f: tf.data.TFRecordDataset(f),
-            num_parallel_calls=tf.data.AUTOTUNE,
             block_length=batch_size,
-            cycle_length=cycle_length)
+            cycle_length=cycle_length,
+            **args)
         .take(take_size)
-        .map(parse_ex_proto_fn)
-        .map(remove_black_pixels_from_masks)
+        .map(parse_ex_proto_fn, **args)
+        .map(remove_black_pixels_from_masks, **args)
         .map(lambda x: (x['image'] / tf.constant(255, tf.float32),
                         x['mask'],
-                        x['name']))
+                        x['name']), **args)
         .batch(batch_size)
         .prefetch(prefetch_size)
     )
 
     if augmentation:
-        ds = ds.map(lambda img, mask, name: (*augmentation_fn(img, mask), name))
+        ds = ds.map(lambda img, mask, name: (*augmentation_fn(img, mask), name),
+                    **args)
 
     if not keep_name:
-        ds = ds.map(lambda img, mask, name: (img, mask))
+        ds = ds.map(lambda img, mask, name: (img, mask), **args)
 
     return ds
 
@@ -118,9 +121,6 @@ def augmentation_fn(img, mask):
     """
 
     seed_args = {'minval': tf.int32.min, 'maxval': tf.int32.max, 'dtype': tf.int32}
-
-    # img = tf.image.resize_with_pad(img, new_height, new_width)
-    # mask = tf.image.resize_with_pad(mask, new_height, new_width)
 
     seed = tf.random.uniform((2,), **seed_args)
     img = tf.image.stateless_random_flip_left_right(img, seed)

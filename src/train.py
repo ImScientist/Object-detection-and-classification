@@ -18,6 +18,22 @@ tfkl = tf.keras.layers
 logger = logging.getLogger(__name__)
 
 
+def gpu_memory_setup():
+    """ Restrict the amount of GPU memory that can be allocated by TensorFlow"""
+
+    gpus = tf.config.list_physical_devices('GPU')
+
+    if gpus:
+        try:
+            tf.config.set_logical_device_configuration(
+                gpus[0],
+                [tf.config.LogicalDeviceConfiguration(memory_limit=settings.GPU_MEMORY_LIMIT * 1024)])
+            logical_gpus = tf.config.list_logical_devices('GPU')
+            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+        except RuntimeError as e:
+            print(e)
+
+
 def get_best_checkpoint(
         checkpoint_dir: str,
         pattern=r'.*_loss_(\d+\.\d{4})_cp.ckpt.index'
@@ -56,22 +72,6 @@ def get_experiment_id(logs_dir: str):
     return experiment_id
 
 
-def gpu_memory_setup():
-    """ Restrict the amount of GPU memory that can be allocated by TensorFlow"""
-
-    gpus = tf.config.list_physical_devices('GPU')
-
-    if gpus:
-        try:
-            tf.config.set_logical_device_configuration(
-                gpus[0],
-                [tf.config.LogicalDeviceConfiguration(memory_limit=settings.GPU_MEMORY_LIMIT * 1024)])
-            logical_gpus = tf.config.list_logical_devices('GPU')
-            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
-        except RuntimeError as e:
-            print(e)
-
-
 def generate_submission(model, ds):
     """ Generate submission """
 
@@ -79,6 +79,7 @@ def generate_submission(model, ds):
     names = names.numpy()
     names = [name.decode() for name in names]
 
+    # TODO: machine runs out of memory !!!
     # shape = (n, height, width, 4)
     masks = model.predict(ds.map(lambda img, mask, name: img))
 

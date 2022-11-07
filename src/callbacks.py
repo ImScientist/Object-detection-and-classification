@@ -81,15 +81,19 @@ class DisplayCallback(tf.keras.callbacks.Callback):
     the training
     """
 
-    def __init__(self, log_dir, ds, n, experiment_data):
+    def __init__(self, log_dir, ds, n, experiment_data, period):
         super(DisplayCallback, self).__init__()
         self.ds = ds.unbatch().batch(1).take(8).cache()
         self.n = n
+        self.period = max(period, 1)
         save_dir = os.path.join(log_dir, 'train')
         self.file_writer = tf.summary.create_file_writer(save_dir)
         self.experiment_data = experiment_data
 
     def on_epoch_end(self, epoch, logs=None):
+        if epoch % self.period != 0:
+            return
+
         y_hat = self.model.predict(self.ds.map(lambda x, y: x))
         y_ = tf.concat([y for y in self.ds.map(lambda x, y: y)], axis=0)
 
@@ -132,7 +136,7 @@ def create_callbacks(
 
     if ds is not None:
         callbacks.append(DisplayCallback(
-            log_dir=log_dir, ds=ds, n=5, experiment_data=experiment_data))
+            log_dir=log_dir, ds=ds, n=5, experiment_data=experiment_data, period=period))
 
     if reduce_lr_patience is not None:
         callbacks.append(
