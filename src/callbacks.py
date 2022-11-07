@@ -5,13 +5,16 @@ import tempfile
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from src.visualization import visualize_multiple_predictions
+
 from PIL import Image
+from visualization import visualize_multiple_predictions
 
 tfkc = tf.keras.callbacks
 
 
 def pretty_json(hp):
+    """ Map dict to a json string """
+
     json_hp = json.dumps(hp, indent=2)
     return "".join("\t" + line for line in json_hp.splitlines(True))
 

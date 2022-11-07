@@ -5,11 +5,12 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 import segmentation_models as sm
+import skimage.transform as st
 
-from src.data.dataset import load_dataset
-from src import settings
-from src.callbacks import create_callbacks
-from src.data.preprocessing import mask_from_compact_notation_inverse
+import settings
+from callbacks import create_callbacks
+from data.dataset import load_dataset
+from data.preprocessing import mask_from_compact_notation_inverse
 
 tfkc = tf.keras.callbacks
 tfkl = tf.keras.layers
@@ -78,6 +79,7 @@ def generate_submission(model, ds):
     names = names.numpy()
     names = [name.decode() for name in names]
 
+    # shape = (n, height, width, 4)
     masks = model.predict(ds.map(lambda img, mask, name: img))
 
     df = pd.DataFrame()
@@ -86,6 +88,8 @@ def generate_submission(model, ds):
     df.set_index(['Image_Label'], inplace=True)
 
     for name, mask in zip(names, masks):
+
+        mask = st.resize(mask, (350, 525), preserve_range=True)
 
         for i, cloud in enumerate(settings.CLASSES):
             mask_compact = mask_from_compact_notation_inverse(mask[..., i])
@@ -96,6 +100,7 @@ def generate_submission(model, ds):
 
     df = df.reset_index()
     df = df.sort_values(['Image_Label'])
+    df = df.reset_index(drop=True)
 
     return df
 
@@ -170,12 +175,12 @@ def train(
     # ds_sb: submission dataset
     dir_tr = os.path.join(ds_dir, 'train')
     dir_va = os.path.join(ds_dir, 'validation')
-    # dir_te = os.path.join(ds_dir, 'test')
+    dir_te = os.path.join(ds_dir, 'test')
     dir_sb = os.path.join(ds_dir, 'submission')
 
-    ds_tr = load_dataset(dir_tr, augmentation=True, **ds_args)
+    ds_tr = load_dataset(dir_tr, **{**ds_args, 'augmentation': True})
     ds_va = load_dataset(dir_va, **ds_args)
-    # ds_te = load_dataset(dir_te, **ds_args)
+    ds_te = load_dataset(dir_te, **ds_args)
     ds_sb = load_dataset(dir_sb, **{**ds_args, 'keep_name': True})
 
     # Train and evaluate a model
@@ -196,5 +201,12 @@ def train(
     model.load_weights(checkpoint_path)
     model.save(save_dir)
 
+    evaluate_va = model.evaluate(ds_va, return_dict=True)
+    evaluate_te = model.evaluate(ds_te, return_dict=True)
+    logger.info('Evaluation: \n'
+                f'validation: {evaluate_va}\n'
+                f'test:       {evaluate_te}')
+
+    # Generate a Kaggle submission file
     df = generate_submission(model, ds_sb)
-    df.to_csv(os.path.join(ds_dir, 'submission.csv'))
+    df.to_csv(os.path.join(save_dir, 'submission.csv'))

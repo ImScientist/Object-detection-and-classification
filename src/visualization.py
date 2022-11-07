@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from PIL import Image, ImageDraw
-from src.data.preprocessing import mask_from_compact_notation
+from data.preprocessing import mask_from_compact_notation
 
 
 def cloud_colors():
