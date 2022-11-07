@@ -1,86 +1,20 @@
 import os
 import re
 import logging
-import tempfile
 import numpy as np
+import pandas as pd
 import tensorflow as tf
+import segmentation_models as sm
+
 from src.data.dataset import load_dataset
-from src.model import generate_baseline_model
 from src import settings
-from PIL import Image
+from src.callbacks import create_callbacks
+from src.data.preprocessing import mask_from_compact_notation_inverse
 
 tfkc = tf.keras.callbacks
+tfkl = tf.keras.layers
 
 logger = logging.getLogger(__name__)
-
-
-def log_model_architecture(model, log_dir: str):
-    """ Store a non-interactive readable model architecture """
-
-    with tempfile.NamedTemporaryFile('w', suffix=".png") as temp:
-        _ = tf.keras.utils.plot_model(
-            model,
-            to_file=temp.name,
-            show_shapes=True,
-            dpi=64)
-
-        im_frame = Image.open(temp.name)
-        im_frame = np.asarray(im_frame)
-
-        """ Log the figure """
-        save_dir = os.path.join(log_dir, 'train')
-        file_writer = tf.summary.create_file_writer(save_dir)
-
-        with file_writer.as_default():
-            tf.summary.image(
-                "model summary",
-                tf.constant(im_frame, dtype=tf.uint8)[tf.newaxis, ...],
-                step=0)
-
-
-def create_callbacks(
-        log_dir: str,
-        save_dir: str = None,
-        histogram_freq: int = 0,
-        reduce_lr_patience: int = 100,
-        profile_batch: tuple = (10, 15),
-        verbose: int = 0,
-        early_stopping_patience: int = 250,
-        period: int = 10
-):
-    """ Generate model training callbacks """
-
-    callbacks = [
-        tfkc.TensorBoard(
-            log_dir=log_dir,
-            histogram_freq=histogram_freq,
-            profile_batch=profile_batch)]
-
-    if reduce_lr_patience is not None:
-        callbacks.append(
-            tfkc.ReduceLROnPlateau(
-                factor=0.2,
-                patience=reduce_lr_patience,
-                verbose=verbose))
-
-    if early_stopping_patience is not None:
-        callbacks.append(
-            tfkc.EarlyStopping(patience=early_stopping_patience))
-
-    if save_dir:
-        path = os.path.join(
-            save_dir,
-            'checkpoints',
-            'epoch_{epoch:03d}_loss_{val_loss:.4f}_cp.ckpt')
-
-        callbacks.append(
-            tfkc.ModelCheckpoint(
-                path,
-                save_weights_only=True,
-                save_best_only=False,
-                period=period))
-
-    return callbacks
 
 
 def get_best_checkpoint(
@@ -137,53 +71,123 @@ def gpu_memory_setup():
             print(e)
 
 
+def generate_submission(model, ds):
+    """ Generate submission """
+
+    names = tf.concat([n for n in ds.map(lambda img, mask, name: name)], axis=0)
+    names = names.numpy()
+    names = [name.decode() for name in names]
+
+    masks = model.predict(ds.map(lambda img, mask, name: img))
+
+    df = pd.DataFrame()
+    df['Image_Label'] = [f'{n}_{c}' for n in names for c in settings.CLASSES]
+    df['EncodedPixels'] = ''
+    df.set_index(['Image_Label'], inplace=True)
+
+    for name, mask in zip(names, masks):
+
+        for i, cloud in enumerate(settings.CLASSES):
+            mask_compact = mask_from_compact_notation_inverse(mask[..., i])
+            mask_compact = [str(x) for x in mask_compact]
+            mask_compact = ' '.join(mask_compact)
+
+            df.loc[f'{name}_{cloud}', 'EncodedPixels'] = mask_compact
+
+    df = df.reset_index()
+    df = df.sort_values(['Image_Label'])
+
+    return df
+
+
+def unet_model(height: int, width: int):
+    """ Adapt a unet model to our problem
+
+    https://github.com/qubvel/segmentation_models/blob/master/examples/multiclass%20segmentation%20(camvid).ipynb
+    """
+
+    # input dimensions should be multiples of 32
+    height_unet = int(np.ceil(height / 32)) * 32
+    width_unet = int(np.ceil(width / 32)) * 32
+
+    height_diff = height_unet - height
+    width_diff = width_unet - width
+
+    model_unet = sm.Unet(
+        backbone_name='resnet18',  # 'resnet18'  'mobilenetv2'
+        input_shape=(height_unet, width_unet, 3),
+        encoder_weights='imagenet',
+        encoder_freeze=True,
+        classes=4,
+        activation=None)
+
+    x_input = tfkl.Input(shape=(height, width, 3), dtype=tf.float32)
+    x = tfkl.ZeroPadding2D(padding=((0, height_diff), (0, width_diff)))(x_input)
+    x = model_unet(x)
+    x = tfkl.Cropping2D(cropping=((0, height_diff), (0, width_diff)))(x)
+
+    model = tf.keras.Model(inputs=x_input, outputs=x)
+
+    return model
+
+
+def dice_coefficient(y_true, y_pred):
+    """ Dice coefficient """
+
+    y_true = tf.cast(y_true, tf.float32)
+    y_pred = tf.cast(y_pred > 0., tf.float32)
+
+    intersection = tf.math.reduce_sum(y_true * y_pred)
+    cardinalities = tf.math.reduce_sum(y_true + y_pred)
+
+    dice = 2. * intersection / cardinalities
+
+    return dice
+
+
 def train(
-        ds_dir: str
+        ds_dir: str,
+        ds_args: dict,
+        callbacks_args: dict,
+        training_args: dict
 ):
     """ Train and evaluate a model """
 
     gpu_memory_setup()
+
+    os.makedirs(settings.TFBOARD_DIR, exist_ok=True)
 
     experiment_id = get_experiment_id(settings.TFBOARD_DIR)
 
     log_dir = os.path.join(settings.TFBOARD_DIR, f'ex_{experiment_id:03d}')
     save_dir = os.path.join(settings.ARTIFACTS_DIR, f'ex_{experiment_id:03d}')
 
-    ds_args = dict(
-        batch_size=64,
-        prefetch_size=tf.data.AUTOTUNE,
-        cache=False,
-        cycle_length=4,
-        max_files=None)
+    all_args = dict(
+        dataset_args=ds_args,
+        callbacks_args=callbacks_args,
+        training_args=training_args)
 
-    training_args = dict(
-        epochs=100,
-        verbose=0)
+    # ds_sb: submission dataset
+    dir_tr = os.path.join(ds_dir, 'train')
+    dir_va = os.path.join(ds_dir, 'validation')
+    # dir_te = os.path.join(ds_dir, 'test')
+    dir_sb = os.path.join(ds_dir, 'submission')
 
-    callbacks_args = dict(
-        histogram_freq=0,
-        reduce_lr_patience=20,
-        profile_batch=(10, 15),
-        verbose=0,
-        early_stopping_patience=250,
-        period=2)
+    ds_tr = load_dataset(dir_tr, augmentation=True, **ds_args)
+    ds_va = load_dataset(dir_va, **ds_args)
+    # ds_te = load_dataset(dir_te, **ds_args)
+    ds_sb = load_dataset(dir_sb, **{**ds_args, 'keep_name': True})
 
-    # NO augmentation
-    ds_tr = load_dataset(data_dir=os.path.join(ds_dir, 'train'), **ds_args)
-    ds_va = load_dataset(data_dir=os.path.join(ds_dir, 'validation'), **ds_args)
-    ds_te = load_dataset(data_dir=os.path.join(ds_dir, 'test'), **ds_args)
-    ds_sb = load_dataset(data_dir=os.path.join(ds_dir, 'submission'), **ds_args)
-
-    model = generate_baseline_model(height=350, width=525)
+    # Train and evaluate a model
+    model = unet_model(height=350, width=525)
 
     model.compile(
         optimizer=tf.optimizers.Adam(learning_rate=0.01),
-        loss=tf.keras.losses.BinaryFocalCrossentropy(gamma=2, from_logits=True))
+        loss=tf.keras.losses.BinaryFocalCrossentropy(gamma=2, from_logits=True),
+        metrics=[dice_coefficient])
 
-    # Train and evaluate a model
-    callbacks = create_callbacks(log_dir, save_dir, **callbacks_args)
-
-    log_model_architecture(model, log_dir)
+    callbacks = create_callbacks(
+        log_dir, save_dir, experiment_data=all_args, ds=ds_va, **callbacks_args)
 
     model.fit(ds_tr, validation_data=ds_va, callbacks=callbacks, **training_args)
 
@@ -191,3 +195,6 @@ def train(
     checkpoint_path = get_best_checkpoint(os.path.join(save_dir, 'checkpoints'))
     model.load_weights(checkpoint_path)
     model.save(save_dir)
+
+    df = generate_submission(model, ds_sb)
+    df.to_csv(os.path.join(ds_dir, 'submission.csv'))

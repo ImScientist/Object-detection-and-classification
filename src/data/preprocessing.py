@@ -81,11 +81,11 @@ def mask_from_compact_notation(
       columns: image width
     """
 
-    mask = np.zeros(shape=(rows * columns,), dtype=bool)
+    mask = np.zeros(shape=(rows * columns,), dtype=int)
 
     for pos, length in zip(mask_compact[::2], mask_compact[1::2]):
         p = pos - 1
-        mask[p: p + length] = True
+        mask[p: p + length] = 1
 
     mask = mask.reshape(columns, rows)
     mask = mask.T
@@ -93,36 +93,39 @@ def mask_from_compact_notation(
     return mask
 
 
-# def create_ex_proto(image_path: str, masks_compact: dict[str, list[int]]):
-#     """ Create a dataset element and map it to tf.train.Example
-#
-#     To keep the disk-size of the tfrecords small we:
-#     - store the bytes of the compressed image
-#     - compress the masks by using tf.io.encode_png() that interprets them as
-#         greyscale images
-#     """
-#
-#     img_str = tf.io.read_file(image_path)  # Load image as a scalar string
-#
-#     rows, cols = 1400, 2100
-#
-#     feat = {}
-#
-#     for k, v in masks_compact.items():
-#         mask = mask_from_compact_notation(v, rows=rows, columns=cols)
-#         mask = tf.constant(mask[..., np.newaxis], dtype=tf.uint8)
-#         mask = tf.io.encode_png(mask)
-#         feat[k] = _bytes_feature(mask)
-#
-#     feat['image_raw'] = _bytes_feature(img_str)
-#
-#     proto = tf.train.Example(features=tf.train.Features(feature=feat))
-#
-#     return proto
+def mask_from_compact_notation_inverse(mask: np.ndarray):
+    """ Inverse fn of `mask_from_compact_notation()` """
+
+    mask = (mask > 0) * 1  # map to 0 and 1
+    mask = mask.T
+    mask = mask.reshape(-1)
+
+    mask_r_extent = np.concatenate((mask, [0]))  # always ends with 0
+    mask_r_shift = np.concatenate(([0], mask))  # always starts with 0
+
+    # positive only if the previous value is 0 and the current value is 1
+    # negative only if the previous value is 1 and the current value is 0
+    # the number of 1 and -1 elements is equal
+    mask_01 = mask_r_extent - mask_r_shift
+
+    start_idx = np.where(mask_01 == 1)[0]
+    end_idx = np.where(mask_01 == -1)[0]
+
+    assert len(start_idx) == len(end_idx)
+
+    lengths_of_stripes_with_ones = end_idx - start_idx
+    begins_of_stripes_with_ones = start_idx + 1
+
+    compact_notation = list(zip(begins_of_stripes_with_ones,
+                                lengths_of_stripes_with_ones))
+
+    compact_notation = np.array(compact_notation).reshape(-1)
+
+    return compact_notation.tolist()
 
 
-# TODO: rename masks with segments
 def create_ex_proto(
+        name: str,
         image_path: str,
         masks_compact: dict[str, list[int]],
         reduction_factor: int = 1
@@ -164,6 +167,7 @@ def create_ex_proto(
         feat[k] = _bytes_feature(mask)
 
     feat['image_raw'] = _bytes_feature(img_str)
+    feat['name'] = _bytes_feature(name.encode('utf-8'))
 
     proto = tf.train.Example(features=tf.train.Features(feature=feat))
 
@@ -196,6 +200,7 @@ def create_tfrecords(
 
             for _, r in df.loc[idx_chunk].iterrows():
                 ex_proto = create_ex_proto(
+                    name=r['image'],
                     image_path=r['image_path'],
                     masks_compact=r['pixels'],
                     reduction_factor=reduction_factor)

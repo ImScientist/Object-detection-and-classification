@@ -16,7 +16,8 @@ def parse_ex_proto_fn(ex_proto_serialized):
         'Gravel': tf.io.FixedLenFeature([], tf.string),
         'Flower': tf.io.FixedLenFeature([], tf.string),
         'Fish': tf.io.FixedLenFeature([], tf.string),
-        'image_raw': tf.io.FixedLenFeature([], tf.string)}
+        'image_raw': tf.io.FixedLenFeature([], tf.string),
+        'name': tf.io.FixedLenFeature([], tf.string)}
 
     ex_proto = tf.io.parse_single_example(
         serialized=ex_proto_serialized,
@@ -28,35 +29,43 @@ def parse_ex_proto_fn(ex_proto_serialized):
         tf.io.decode_png(ex_proto['Flower'], channels=1),
         tf.io.decode_png(ex_proto['Fish'], channels=1),
     ], axis=-1)
-    mask = tf.cast(mask, tf.float32)
 
     image = tf.io.decode_jpeg(ex_proto['image_raw'])
+    name = ex_proto['name']
 
-    return {'image': image, 'mask': mask}
+    return {'image': image, 'mask': mask, 'name': name}
 
 
 def remove_black_pixels_from_masks(el):
-    """ Remove the areas in the mask where the image pixels are black """
+    """ Remove the areas in the mask where the image pixels are black
+
+    Both image and mask hold values of type uint8.
+    """
+
+    image = tf.cast(el['image'], tf.float32)
+    mask = tf.cast(el['mask'], tf.float32)
 
     non_black_px = tf.clip_by_value(
-        tf.reduce_sum(el['image'], axis=-1, keepdims=True),
-        tf.constant(0, dtype=tf.uint8),
-        tf.constant(1, dtype=tf.uint8))
+        tf.reduce_sum(image, axis=-1, keepdims=True),
+        tf.constant(0, tf.float32),
+        tf.constant(1, tf.float32))
 
-    non_black_px = tf.cast(non_black_px, dtype=tf.float32)
+    mask = mask * non_black_px
 
-    mask = el['mask'] * non_black_px
+    name = el['name']
 
-    return {'image': el['image'], 'mask': mask}
+    return {'image': image, 'mask': mask, 'name': name}
 
 
 def load_dataset(
         data_dir: str,
         batch_size: int,
         prefetch_size: int,
-        cache: bool = False,
         cycle_length: int = 2,
         max_files: int = None,
+        take_size: int = -1,
+        augmentation: bool = False,
+        keep_name: bool = False
 ):
     """ Make dataset from a directory with .tfrecords files
 
@@ -65,13 +74,15 @@ def load_dataset(
     data_dir:
     batch_size:
     prefetch_size:
-    cache:
     cycle_length: number of files to read concurrently
     max_files: take all files if max_files=None
+    take_size: take all elements of the dataset if take_size=-1
+    augmentation: augment the data
+    keep_name: keep image_name in the dataset
     """
 
     files = glob.glob(os.path.join(data_dir, '*.tfrecords'))
-    files = files[:max_files]
+    files = sorted(files)[:max_files]
 
     ds = (
         tf.data.Dataset
@@ -81,62 +92,59 @@ def load_dataset(
             num_parallel_calls=tf.data.AUTOTUNE,
             block_length=batch_size,
             cycle_length=cycle_length)
+        .take(take_size)
         .map(parse_ex_proto_fn)
         .map(remove_black_pixels_from_masks)
-        .map(lambda x: (tf.cast(x['image'], dtype=tf.float32), x['mask']))
+        .map(lambda x: (x['image'] / tf.constant(255, tf.float32),
+                        x['mask'],
+                        x['name']))
         .batch(batch_size)
         .prefetch(prefetch_size)
     )
 
-    # hm...
-    if cache:
-        ds = ds.cache()
+    if augmentation:
+        ds = ds.map(lambda img, mask, name: (*augmentation_fn(img, mask), name))
 
-    # resize_and_rescale_, augment_ = preprocess_layers(new_height=350, new_width=525)
-
-    # # TODO: apply the same transformation to image and mask....
-    # if resize_and_rescale:
-    #     ds = ds.map(lambda img, mask: (resize_and_rescale_(img), resize_and_rescale_(mask)))
+    if not keep_name:
+        ds = ds.map(lambda img, mask, name: (img, mask))
 
     return ds
 
 
-def augmentation_fn(
-        img, mask, new_height, new_width, training=True
-):
-    """ Image and mask augmentation """
+def augmentation_fn(img, mask):
+    """ Image and mask augmentation
+
+    Both image and mask hold values of type tf.float32.
+    """
 
     seed_args = {'minval': tf.int32.min, 'maxval': tf.int32.max, 'dtype': tf.int32}
 
-    img = img / tf.constant(255, tf.float32)
+    # img = tf.image.resize_with_pad(img, new_height, new_width)
+    # mask = tf.image.resize_with_pad(mask, new_height, new_width)
 
-    img = tf.image.resize_with_pad(img, new_height, new_width)
-    mask = tf.image.resize_with_pad(mask, new_height, new_width)
+    seed = tf.random.uniform((2,), **seed_args)
+    img = tf.image.stateless_random_flip_left_right(img, seed)
+    mask = tf.image.stateless_random_flip_left_right(mask, seed)
 
-    if training:
-        seed = tf.random.uniform((2,), **seed_args)
-        img = tf.image.stateless_random_flip_left_right(img, seed)
-        mask = tf.image.stateless_random_flip_left_right(mask, seed)
+    seed = tf.random.uniform((2,), **seed_args)
+    img = tf.image.stateless_random_flip_up_down(img, seed)
+    mask = tf.image.stateless_random_flip_up_down(mask, seed)
 
-        seed = tf.random.uniform((2,), **seed_args)
-        img = tf.image.stateless_random_flip_up_down(img, seed)
-        mask = tf.image.stateless_random_flip_up_down(mask, seed)
+    # Image transformations that do not require a modification of the mask
+    seed = tf.random.uniform((2,), **seed_args)
+    img = tf.image.stateless_random_brightness(img, .2, seed)
+    img = tf.clip_by_value(img, 0, 1)
 
-        # Image transformations that do not require a modification of the mask
-        seed = tf.random.uniform((2,), **seed_args)
-        img = tf.image.stateless_random_brightness(img, .2, seed)
-        img = tf.clip_by_value(img, 0, 1)
+    seed = tf.random.uniform((2,), **seed_args)
+    img = tf.image.stateless_random_contrast(img, .8, 1.2, seed)
+    img = tf.clip_by_value(img, 0, 1)
 
-        seed = tf.random.uniform((2,), **seed_args)
-        img = tf.image.stateless_random_contrast(img, .8, 1.2, seed)
-        img = tf.clip_by_value(img, 0, 1)
+    seed = tf.random.uniform((2,), **seed_args)
+    img = tf.image.stateless_random_saturation(img, 0.8, 1.2, seed)
+    img = tf.clip_by_value(img, 0, 1)
 
-        seed = tf.random.uniform((2,), **seed_args)
-        img = tf.image.stateless_random_saturation(img, 0.8, 1.2, seed)
-        img = tf.clip_by_value(img, 0, 1)
-
-        seed = tf.random.uniform((2,), **seed_args)
-        img = tf.image.stateless_random_hue(img, 0.2, seed)
-        img = tf.clip_by_value(img, 0, 1)
+    seed = tf.random.uniform((2,), **seed_args)
+    img = tf.image.stateless_random_hue(img, 0.2, seed)
+    img = tf.clip_by_value(img, 0, 1)
 
     return img, mask

@@ -3,7 +3,35 @@ import matplotlib.pyplot as plt
 
 from PIL import Image, ImageDraw
 from src.data.preprocessing import mask_from_compact_notation
-from src.utils import cloud_colors
+
+
+def cloud_colors():
+    """ Colors assigned to each cloud type """
+
+    colors = {
+        'Sugar': (128, 0, 0, 255),
+        'Gravel': (0, 128, 0, 255),
+        'Flower': (0, 0, 128, 255),
+        'Fish': (128, 0, 128, 255)}
+
+    return colors
+
+
+def visualize_colors_map():
+    """ Segments colr map """
+
+    colors = cloud_colors()
+
+    img = Image.new(mode='RGBA', size=(240, 30), color=(0, 0, 0, 255))
+    draw = ImageDraw.Draw(img)
+
+    for idx, (k, v) in enumerate(colors.items()):
+        draw.text(xy=(10 + 60 * idx, 10), text=k, fill=v)
+
+    plt.figure(figsize=(8, 3))
+    plt.imshow(img)
+    plt.pause(0.001)
+    plt.show()
 
 
 def visualize_labeled_image(
@@ -51,7 +79,7 @@ def visualize_multiple_predictions(y, y_hat, n: int = 5):
     Parameters
     ----------
       y: tensor or np.array with shape(None, widht, height, 4)
-      y_hat: tensor or np.array with shape(None, widht, height, 4)
+      y_hat: tensor or np-array with shape(None, widht, height, 4)
       n: number of images
     """
 
@@ -81,18 +109,37 @@ def visualize_multiple_predictions(y, y_hat, n: int = 5):
     return fig
 
 
-# TOOD: include masks
-def visualize_image_augmentations(img_orig, img_augmented, figsize=(20, 8)):
-    """ Visualize image or mask augmentations """
+def visualize_image_augmentations(x, x_aug, y, y_aug, figsize=(22, 7)):
+    """ Visualize image amd segment augmentations
+
+    Parameters
+    ----------
+      x: image
+      x_aug: augmented image
+      y: segments
+      y_aug: augmented segments
+      figsize:
+    """
 
     fig = plt.figure(figsize=figsize)
 
-    plt.subplot(1, 2, 1)
-    plt.title('Original image')
-    plt.imshow(img_orig)
+    plt.subplot(2, 5, 1)
+    plt.title('Image')
+    plt.imshow(x)
 
-    plt.subplot(1, 2, 2)
+    plt.subplot(2, 5, 6)
     plt.title('Augmented image')
-    plt.imshow(img_augmented)
+    plt.imshow(x_aug)
+
+    for i in range(4):
+        plt.subplot(2, 5, 2 + i)
+        plt.title('Segments')
+        plt.imshow(y[..., i])
+
+        plt.subplot(2, 5, 7 + i)
+        plt.title('Augmented segments')
+        plt.imshow(y_aug[..., i])
+
+    plt.tight_layout()
 
     return fig

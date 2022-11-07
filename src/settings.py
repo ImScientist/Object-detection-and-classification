@@ -4,3 +4,5 @@ ARTIFACTS_DIR = "/home/ai/projects/object-detection-and-classification/saved_mod
 
 # maximum memory in GB that can be allocated by tensorflow
 GPU_MEMORY_LIMIT = 20
+
+CLASSES = ['Sugar', 'Gravel', 'Flower', 'Fish']
